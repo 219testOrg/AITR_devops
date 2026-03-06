@@ -10,6 +10,8 @@ import tempfile
 import urllib.request
 import xml.etree.ElementTree as ET
 from xml.sax import make_parser
+import ast
+import operator
 from flask import Flask, request, redirect, Response, render_template_string, make_response
 
 app = Flask(__name__)
@@ -100,11 +102,63 @@ def whois():
 #  7. Code Injection — eval() (CWE-94) [CRITICAL]
 # ============================================================
 
+# Safe mathematical operators allowed for calculator
+SAFE_OPERATORS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+    ast.USub: operator.neg,
+    ast.UAdd: operator.pos,
+}
+
+def safe_eval_expr(expr_string):
+    """
+    Safely evaluate a mathematical expression using AST parsing.
+    Only allows basic arithmetic operations, preventing code injection.
+    """
+    try:
+        # Parse the expression into an AST
+        node = ast.parse(expr_string, mode='eval').body
+        return _eval_node(node)
+    except (SyntaxError, ValueError, TypeError, KeyError, ZeroDivisionError) as e:
+        raise ValueError(f"Invalid expression: {str(e)}")
+
+def _eval_node(node):
+    """
+    Recursively evaluate an AST node, only allowing safe operations.
+    """
+    if isinstance(node, ast.Constant):  # Numbers (Python 3.8+)
+        return node.value
+    elif isinstance(node, ast.Num):  # Numbers (Python 3.7 and earlier)
+        return node.n
+    elif isinstance(node, ast.BinOp):  # Binary operations (e.g., +, -, *, /)
+        left = _eval_node(node.left)
+        right = _eval_node(node.right)
+        operator_func = SAFE_OPERATORS.get(type(node.op))
+        if operator_func is None:
+            raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+        return operator_func(left, right)
+    elif isinstance(node, ast.UnaryOp):  # Unary operations (e.g., -x, +x)
+        operand = _eval_node(node.operand)
+        operator_func = SAFE_OPERATORS.get(type(node.op))
+        if operator_func is None:
+            raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+        return operator_func(operand)
+    else:
+        raise ValueError(f"Unsupported expression type: {type(node).__name__}")
+
 @app.route("/calc")
 def calculator():
     expr = request.args.get("expr", "0")
-    result = eval(expr)
-    return Response(str(result), mimetype="text/plain")
+    try:
+        result = safe_eval_expr(expr)
+        return Response(str(result), mimetype="text/plain")
+    except ValueError as e:
+        return Response(f"Error: {str(e)}", status=400, mimetype="text/plain")
 
 
 # ============================================================
