@@ -20,13 +20,15 @@ db_connection = None
 
 @app.route("/vulnerable/user/select_by_id/0")
 def vuln_user_select_by_id_v0():
-    """Vulnerable user lookup by ID - variant 0"""
+    """Secure user lookup by ID - variant 0 (fixed)"""
     param = request.args.get("id", "")
-    query = f"SELECT id, username, email, password, role, status FROM users WHERE id = {param}"
-    logging.info(f"Executing: {query}")
+    # Use parameterized query to prevent SQL injection
+    query = "SELECT id, username, email, password, role, status FROM users WHERE id = ?"
+    logging.info(f"Executing query with param: {param}")
     try:
         cursor = db_connection.cursor()
-        cursor.execute(query)
+        # Execute with parameter tuple to prevent SQL injection
+        cursor.execute(query, (param,))
         rows = cursor.fetchall()
         result = [str(row) for row in rows]
         return Response("\n".join(result), mimetype="text/plain")
