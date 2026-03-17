@@ -188,7 +188,15 @@ exports.create = function (req, res, next) {
 };
 
 exports.destroy = function (req, res, next) {
-  Todo.findById(req.params.id, function (err, todo) {
+  // Sanitize and validate the id parameter to prevent command injection
+  // MongoDB ObjectIDs are 24 character hex strings
+  const id = req.params.id;
+
+  if (!validator.isHexadecimal(id) || id.length !== 24) {
+    return res.status(400).send('Invalid ID format');
+  }
+
+  Todo.findById(id, function (err, todo) {
 
     try {
       todo.remove(function (err, todo) {
@@ -201,6 +209,14 @@ exports.destroy = function (req, res, next) {
 };
 
 exports.edit = function (req, res, next) {
+  // Sanitize and validate the id parameter to prevent command injection
+  // MongoDB ObjectIDs are 24 character hex strings
+  const id = req.params.id;
+
+  if (!validator.isHexadecimal(id) || id.length !== 24) {
+    return res.status(400).send('Invalid ID format');
+  }
+
   Todo.
     find({}).
     sort('-updated_at').
@@ -210,13 +226,21 @@ exports.edit = function (req, res, next) {
       res.render('edit', {
         title: 'TODO',
         todos: todos,
-        current: req.params.id
+        current: id
       });
     });
 };
 
 exports.update = function (req, res, next) {
-  Todo.findById(req.params.id, function (err, todo) {
+  // Sanitize and validate the id parameter to prevent command injection
+  // MongoDB ObjectIDs are 24 character hex strings
+  const id = req.params.id;
+
+  if (!validator.isHexadecimal(id) || id.length !== 24) {
+    return res.status(400).send('Invalid ID format');
+  }
+
+  Todo.findById(id, function (err, todo) {
 
     todo.content = req.body.content;
     todo.updated_at = Date.now();
